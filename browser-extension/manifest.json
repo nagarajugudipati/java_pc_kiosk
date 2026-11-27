@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Lab Control Managed Websites",
+  "version": "1.0.0",
+  "minimum_chrome_version": "120",
+  "permissions": ["alarms", "declarativeNetRequest", "storage", "webNavigation"],
+  "host_permissions": ["http://127.0.0.1:48731/*", "http://*/*", "https://*/*"],
+  "background": {"service_worker": "background.mjs", "type": "module"},
+  "options_ui": {"page": "options.html", "open_in_tab": true}
+}

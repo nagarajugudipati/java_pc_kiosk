@@ -1,6 +1,6 @@
 package com.labcontrol.engine;
 
-import com.labcontrol.service.FirestoreService;
+import com.labcontrol.service.SupabaseService;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -12,8 +12,8 @@ import java.util.Set;
 
 public class UsageMonitor {
 
-    private final FirestoreService firestoreService;
-    private volatile boolean running = false;
+    private final SupabaseService supabaseService;
+    private volatile Thread monitorThread;
 
     private static final Set<String> IGNORED_SYSTEM_PROCESSES = new HashSet<>(Arrays.asList(
             "jcmd.exe", "java.exe", "javaw.exe", "javac.exe", "jshell.exe", "jps.exe", "jstat.exe",
@@ -82,26 +82,30 @@ public class UsageMonitor {
     }
 
     public UsageMonitor() {
-        this.firestoreService = new FirestoreService();
+        this.supabaseService = SupabaseService.shared();
     }
 
-    public UsageMonitor(FirestoreService firestoreService) {
-        this.firestoreService = firestoreService;
+    public UsageMonitor(SupabaseService supabaseService) {
+        this.supabaseService = supabaseService;
     }
 
     public void start(String classCode, String studentName) {
-        if (running) {
+        start(classCode, studentName, null);
+    }
+
+    public synchronized void start(String classCode, String studentName, String studentId) {
+        if (monitorThread != null) {
             System.out.println("UsageMonitor is already running.");
             return;
         }
-        running = true;
+        supabaseService.beginStudentSession(classCode, studentId);
         System.out.println("Usage monitoring started...");
 
-        new Thread(() -> {
+        monitorThread = new Thread(() -> {
             Set<String> previousProcesses = new HashSet<>();
             boolean isBaselineEstablished = false;
 
-            while (running) {
+            while (Thread.currentThread() == monitorThread) {
                 try {
                     Set<String> currentProcesses = getRunningProcesses();
 
@@ -110,29 +114,40 @@ public class UsageMonitor {
                         isBaselineEstablished = true;
                     } else {
                         for (String processName : currentProcesses) {
+                            if (Thread.currentThread() != monitorThread) {
+                                return;
+                            }
                             if (!previousProcesses.contains(processName)) {
                                 if (isIgnoredProcess(processName)) {
                                     continue;
                                 }
                                 String appName = getFriendlyAppName(processName);
                                 System.out.println("New application opened: " + appName + " (" + processName + ")");
-                                firestoreService.addUsageLog(classCode, appName, processName, studentName);
-                                System.out.println("Firestore log added: " + appName);
+                                supabaseService.addUsageLog(classCode, appName, processName, studentName, studentId);
                             }
                         }
                         previousProcesses = currentProcesses;
                     }
 
                     Thread.sleep(2000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
                 } catch (Exception e) {
                     System.err.println("Error in UsageMonitor thread: " + e.getMessage());
                 }
             }
-        }, "UsageMonitorThread").start();
+        }, "UsageMonitorThread");
+        monitorThread.start();
     }
 
-    public void stop() {
-        running = false;
+    public synchronized void stop() {
+        if (monitorThread != null) {
+            Thread previous = monitorThread;
+            monitorThread = null;
+            supabaseService.endStudentSession();
+            previous.interrupt();
+        }
     }
 
     public static boolean isIgnoredProcess(String processName) {

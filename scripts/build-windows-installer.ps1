@@ -28,6 +28,7 @@ Write-Host "[2/2] Running jpackage to bundle Java runtime & application..." -For
            --input "target" `
            --main-jar "LabControlStudentAgent-1.0.0.jar" `
            --main-class "com.labcontrol.Main" `
+           --add-modules "java.se,jdk.crypto.ec,jdk.charsets,jdk.httpserver" `
            --type app-image `
            --dest $distDir `
            --win-console

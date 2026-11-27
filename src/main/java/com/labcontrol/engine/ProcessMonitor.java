@@ -1,28 +1,33 @@
 package com.labcontrol.engine;
 
 import com.labcontrol.model.Policy;
-import com.labcontrol.service.FirestoreService;
+import com.labcontrol.service.SupabaseService;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ProcessMonitor {
 
-    private final FirestoreService firestoreService;
+    private final SupabaseService supabaseService;
     private final String pcName;
+    private final AtomicBoolean started = new AtomicBoolean();
 
     public ProcessMonitor() {
-        this("PC-1", new FirestoreService());
+        this(SupabaseService.shared().computerName(), SupabaseService.shared());
     }
 
-    public ProcessMonitor(String pcName, FirestoreService firestoreService) {
+    public ProcessMonitor(String pcName, SupabaseService supabaseService) {
         this.pcName = pcName;
-        this.firestoreService = firestoreService;
+        this.supabaseService = supabaseService;
     }
 
     public void start(Policy policy) {
+        if (!started.compareAndSet(false, true)) {
+            return;
+        }
 
         new Thread(() -> {
 
@@ -51,22 +56,21 @@ public class ProcessMonitor {
                         isBaselineEstablished = true;
                     } else {
                         for (String processName : currentProcesses) {
+                            if (UsageMonitor.isIgnoredProcess(processName)) {
+                                continue;
+                            }
                             if (!previousProcesses.contains(processName)) {
-                                if (UsageMonitor.isIgnoredProcess(processName)) {
-                                    continue;
-                                }
-
                                 String appName = UsageMonitor.getFriendlyAppName(processName);
                                 boolean isBlocked = policy.blockedApps.stream()
                                         .anyMatch(app -> processName.contains(app.toLowerCase()) || app.toLowerCase().contains(processName.replace(".exe", "")));
 
                                 if (isBlocked) {
                                     System.out.println("[BLOCKED] " + appName + " (" + processName + ") on " + pcName);
-                                    firestoreService.logActivity(pcName, appName, processName, "BLOCKED");
+                                    supabaseService.logActivity(pcName, appName, processName, "BLOCKED");
                                     Runtime.getRuntime().exec("taskkill /F /IM " + processName);
                                 } else {
                                     System.out.println("[OPENED] " + appName + " (" + processName + ") on " + pcName);
-                                    firestoreService.logActivity(pcName, appName, processName, "OPENED");
+                                    supabaseService.logActivity(pcName, appName, processName, "OPENED");
                                 }
                             } else {
                                 boolean isBlocked = policy.blockedApps.stream()
