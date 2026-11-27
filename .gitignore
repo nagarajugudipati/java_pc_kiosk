@@ -1,14 +1,19 @@
 # Compiled class files & build directories
 target/
+node_modules/
 build/
 *.class
 
 # Log files
 *.log
 
-# Firebase & Secret Credentials (SECURITY)
+# Local credentials
 *service-account*.json
-firebase*.json
+.env
+.env.*
+!.env.example
+supabase.local.properties
+kiosk-history/
 *.pem
 *.key
 *.p12

@@ -2,11 +2,16 @@ package com.labcontrol;
 
 import com.labcontrol.cli.CommandLineApp;
 import com.labcontrol.engine.ProcessMonitor;
+import com.labcontrol.cli.StudentKioskWindow;
 import com.labcontrol.model.Policy;
 import com.labcontrol.service.PolicyManager;
 
 public class Main {
     public static void main(String[] args) {
+        if (args.length > 0 && args[0].equalsIgnoreCase("--student")) {
+            javax.swing.SwingUtilities.invokeLater(() -> new StudentKioskWindow().show());
+            return;
+        }
         if (args.length > 0 && args[0].equalsIgnoreCase("--cli")) {
             new CommandLineApp().start();
             return;
